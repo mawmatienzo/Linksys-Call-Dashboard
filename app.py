@@ -376,28 +376,8 @@ st.dataframe(table, use_container_width=True, hide_index=True,
 st.markdown("---")
 st.markdown("### ⏱ Per Interval Data")
 
-# Date filter for interval table
-all_dates = sorted(df['date'].dt.date.unique())
-date_options = ["-- All Dates --"] + [str(d) for d in all_dates]
-
-col_if1, col_if2, col_if3 = st.columns([1,1,4])
-with col_if1:
-    sel_date_from = st.selectbox("Date From", date_options, index=0, key="int_from")
-with col_if2:
-    sel_date_to   = st.selectbox("Date To",   date_options, index=0, key="int_to")
-
-# Apply date filter
+# Use the already-filtered df (sidebar filters already applied)
 df_int = df.copy()
-if sel_date_from != "-- All Dates --":
-    df_int = df_int[df_int['date'].dt.date >= pd.to_datetime(sel_date_from).date()]
-if sel_date_to != "-- All Dates --":
-    df_int = df_int[df_int['date'].dt.date <= pd.to_datetime(sel_date_to).date()]
-
-# Also apply skill filters from sidebar
-if sel_lobs:    df_int = df_int[df_int['lob'].isin(sel_lobs)]
-if sel_queues:  df_int = df_int[df_int['queue'].isin(sel_queues)]
-if sel_warranty:
-    df_int = df_int[df_int['warranty'].isin(sel_warranty) | (df_int['warranty'] == '')]
 
 # Aggregate by interval
 if 'interval' in df_int.columns:
