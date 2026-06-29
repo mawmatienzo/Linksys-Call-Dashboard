@@ -42,6 +42,26 @@ def fmt_mmss(seconds):
     s = int(seconds)
     return f"{s//60:02d}:{s%60:02d}"
 
+def load_chat_data(file_bytes):
+    df = pd.read_excel(BytesIO(file_bytes), sheet_name='Sheet1')
+    df = df[['Department(s)', 'Date', 'Total chat duration (secs)', 'Missed?']].copy()
+    df.columns = ['department', 'date_raw', 'duration', 'missed']
+    # Clean date — ISO format string like 2024-09-14T23:13:16-07:00
+    df['date'] = pd.to_datetime(df['date_raw'].astype(str).str[:10], errors='coerce')
+    df['interval'] = pd.to_datetime(df['date_raw'].astype(str).str[11:16], format='%H:%M', errors='coerce').dt.strftime('%H:%M')
+    # Round interval down to nearest 30 min
+    df['hour']   = pd.to_datetime(df['date_raw'].astype(str).str[11:16], format='%H:%M', errors='coerce').dt.hour
+    df['minute'] = pd.to_datetime(df['date_raw'].astype(str).str[11:16], format='%H:%M', errors='coerce').dt.minute
+    df['minute'] = (df['minute'] // 30) * 30
+    df['interval'] = df['hour'].astype(str).str.zfill(2) + ':' + df['minute'].astype(str).str.zfill(2)
+    df['duration'] = pd.to_numeric(df['duration'], errors='coerce').fillna(0)
+    df['missed']   = df['missed'].astype(str).str.strip()
+    df['offered']  = 1
+    df['answered'] = (df['missed'] == 'No').astype(int)
+    df['missed_n'] = (df['missed'] == 'Yes').astype(int)
+    df = df.dropna(subset=['date'])
+    return df
+
 def week_ending_saturday(dt):
     """Ceiling to nearest Saturday."""
     day = dt.weekday()          # Mon=0 … Sun=6
@@ -169,6 +189,13 @@ def load_from_file(path):
     with open(path, 'rb') as f:
         return load_data(f.read())
 
+CHAT_FILE = 'Chat_Data.xlsx'
+
+@st.cache_data(show_spinner="Loading chat data...")
+def load_chat_file(path):
+    with open(path, 'rb') as f:
+        return load_chat_data(f.read())
+
 if os.path.exists(DATA_FILE):
     raw = load_from_file(DATA_FILE)
 else:
@@ -178,6 +205,11 @@ else:
     else:
         st.info("👈 Upload your **Phone_Data.xlsx** file in the sidebar to get started.")
         st.stop()
+
+if os.path.exists(CHAT_FILE):
+    chat_raw = load_chat_file(CHAT_FILE)
+else:
+    chat_raw = None
 
 # ── SIDEBAR FILTERS ───────────────────────────────────────────────────────────
 st.sidebar.markdown("### 🔍 Filters")
@@ -490,6 +522,171 @@ if 'interval' in df_int.columns:
 
 else:
     st.info("Interval column not found in uploaded data.")
+
+# ── CHAT SECTION ─────────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown("## 💬 Chat — LOB: CHAT")
+
+if chat_raw is not None:
+    # Apply same date/period filters as phone data
+    df_chat = chat_raw.copy()
+    if sel_dates:
+        df_chat = df_chat[df_chat['date'].dt.date.isin(sel_dates)]
+    elif sel_weeks:
+        week_dates = pd.to_datetime(sel_weeks)
+        df_chat = df_chat[df_chat['date'].apply(week_ending_saturday).dt.normalize().isin(week_dates)]
+    elif sel_months:
+        df_chat = df_chat[df_chat['date'].dt.to_period('M').astype(str).isin(sel_months)]
+
+    if df_chat.empty:
+        st.warning("No chat data matches the selected filters.")
+    else:
+        # ── Chat KPI cards ───────────────────────────────────────────────────
+        c_offered  = int(df_chat['offered'].sum())
+        c_answered = int(df_chat['answered'].sum())
+        c_missed   = int(df_chat['missed_n'].sum())
+        c_abn_pct  = round(c_missed / c_offered * 100, 1) if c_offered > 0 else 0
+        c_duration = df_chat.loc[df_chat['answered']==1, 'duration'].sum()
+        c_cht_sec  = round(c_duration / c_answered, 1) if c_answered > 0 else 0
+        c_cht_mmss = f"{int(c_cht_sec)//60:02d}:{int(c_cht_sec)%60:02d}"
+
+        cc1,cc2,cc3,cc4,cc5 = st.columns(5)
+        kpi(cc1, "Offered Chat",   f"{c_offered:,}",    "Total chats offered",       "#4f8ef7")
+        kpi(cc2, "Answered Chat",  f"{c_answered:,}",   f"{round(c_answered/c_offered*100,1) if c_offered else 0}% answer rate", "#22d3a0")
+        kpi(cc3, "Missed Chat",    f"{c_missed:,}",     "Not answered",              "#f7564a")
+        kpi(cc4, "Abandoned %",    f"{c_abn_pct}%",     "Missed / Offered",
+            "#f7564a" if c_abn_pct>15 else "#f5a623" if c_abn_pct>10 else "#22d3a0",
+            ("High","badge-bad") if c_abn_pct>15 else ("Watch","badge-warn") if c_abn_pct>10 else ("OK","badge-good"))
+        kpi(cc5, "Chat Handle Time", c_cht_mmss,        "Duration ÷ Answered",       "#7c5cfc")
+
+        st.markdown("---")
+
+        # ── Aggregate by period for charts ───────────────────────────────────
+        if gran == 'Daily':
+            df_chat['period'] = df_chat['date']
+            df_chat['label']  = df_chat['date'].dt.strftime('%Y-%m-%d')
+        elif gran == 'Weekly':
+            df_chat['period'] = df_chat['date'].apply(week_ending_saturday).dt.normalize()
+            df_chat['label']  = 'WE ' + df_chat['period'].dt.strftime('%b %d, %Y')
+        else:
+            df_chat['period'] = df_chat['date'].apply(eomonth).dt.normalize()
+            df_chat['label']  = df_chat['period'].dt.strftime('%B %Y')
+
+        grp_c = df_chat.groupby(['period','label'], sort=True).agg(
+            offered =('offered',  'sum'),
+            answered=('answered', 'sum'),
+            missed  =('missed_n', 'sum'),
+            duration=('duration', 'sum'),
+        ).reset_index()
+        grp_c['abn_pct'] = np.where(grp_c['offered']>0, grp_c['missed']/grp_c['offered']*100, 0)
+        grp_c['cht_sec'] = np.where(grp_c['answered']>0, grp_c['duration']/grp_c['answered'], 0)
+
+        # Chat Volume line chart
+        fig_cv = go.Figure()
+        fig_cv.add_scatter(x=grp_c['label'], y=grp_c['offered'],  name='Offered',
+            mode='lines+markers', line=dict(color='#4f8ef7', width=2), marker=dict(size=4))
+        fig_cv.add_scatter(x=grp_c['label'], y=grp_c['answered'], name='Answered',
+            mode='lines+markers', line=dict(color='#22d3a0', width=2), marker=dict(size=4))
+        fig_cv.add_scatter(x=grp_c['label'], y=grp_c['missed'],   name='Missed',
+            mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=4))
+        fig_cv.update_layout(**PLOT_LAYOUT, title='Chat Volume', height=280,
+            xaxis=XAXIS_BASE, yaxis=YAXIS_BASE)
+        st.plotly_chart(fig_cv, use_container_width=True)
+
+        col_c1, col_c2 = st.columns(2)
+
+        # Abandoned %
+        fig_ca = go.Figure()
+        fig_ca.add_scatter(x=grp_c['label'], y=grp_c['abn_pct'].round(1),
+            mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=4),
+            fill='tozeroy', fillcolor='rgba(247,86,74,.08)')
+        fig_ca.update_layout(**PLOT_LAYOUT, title='Abandoned Chat %', height=250,
+            xaxis=XAXIS_BASE, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
+        col_c1.plotly_chart(fig_ca, use_container_width=True)
+
+        # Chat Handle Time
+        fig_ch = go.Figure()
+        cht_vals = grp_c['cht_sec'].round(0)
+        cht_text = cht_vals.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+        cht_min = int(cht_vals.min()); cht_max = int(cht_vals.max())
+        start_c = (cht_min // 300) * 300
+        tv_c  = list(range(start_c, cht_max + 300, 300))
+        tt_c  = [f"{v//60:02d}:00" for v in tv_c]
+        fig_ch.add_scatter(x=grp_c['label'], y=cht_vals,
+            mode='lines+markers', line=dict(color='#7c5cfc', width=2), marker=dict(size=4),
+            text=cht_text, hovertemplate='%{x}<br>CHT: %{text}<extra></extra>',
+            fill='tozeroy', fillcolor='rgba(124,92,252,.08)')
+        fig_ch.update_layout(**PLOT_LAYOUT, title='Chat Handle Time (MM:SS)', height=250,
+            xaxis=XAXIS_BASE, yaxis=dict(**YAXIS_BASE, tickvals=tv_c, ticktext=tt_c,
+            range=[start_c - 60, cht_max + 120]))
+        col_c2.plotly_chart(fig_ch, use_container_width=True)
+
+        # ── Per Interval Chat Table & Charts ─────────────────────────────────
+        st.markdown("---")
+        st.markdown("### ⏱ Chat Per Interval Data")
+
+        grp_ci = df_chat.groupby('interval', sort=True).agg(
+            offered =('offered',  'sum'),
+            answered=('answered', 'sum'),
+            missed  =('missed_n', 'sum'),
+            duration=('duration', 'sum'),
+        ).reset_index()
+        grp_ci['abn_pct'] = np.where(grp_ci['offered']>0, grp_ci['missed']/grp_ci['offered']*100, 0)
+        grp_ci['cht_sec'] = np.where(grp_ci['answered']>0, grp_ci['duration']/grp_ci['answered'], 0)
+
+        # Interval volume chart
+        fig_civ = go.Figure()
+        fig_civ.add_scatter(x=grp_ci['interval'], y=grp_ci['offered'],  name='Offered',
+            mode='lines+markers', line=dict(color='#4f8ef7', width=2), marker=dict(size=3))
+        fig_civ.add_scatter(x=grp_ci['interval'], y=grp_ci['answered'], name='Answered',
+            mode='lines+markers', line=dict(color='#22d3a0', width=2), marker=dict(size=3))
+        fig_civ.add_scatter(x=grp_ci['interval'], y=grp_ci['missed'],   name='Missed',
+            mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=3))
+        fig_civ.update_layout(**PLOT_LAYOUT, title='Chat Volume by Interval', height=250,
+            xaxis=XAXIS_INT, yaxis=YAXIS_BASE)
+        st.plotly_chart(fig_civ, use_container_width=True)
+
+        col_ci1, col_ci2 = st.columns(2)
+
+        fig_cia = go.Figure()
+        fig_cia.add_scatter(x=grp_ci['interval'], y=grp_ci['abn_pct'].round(1),
+            mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=3),
+            fill='tozeroy', fillcolor='rgba(247,86,74,.08)')
+        fig_cia.update_layout(**PLOT_LAYOUT, title='Abandoned % by Interval', height=220,
+            xaxis=XAXIS_INT, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
+        col_ci1.plotly_chart(fig_cia, use_container_width=True)
+
+        fig_cih = go.Figure()
+        chti_vals = grp_ci['cht_sec'].round(0)
+        chti_text = chti_vals.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+        chti_min = int(chti_vals.min()); chti_max = int(chti_vals.max())
+        start_ci = (chti_min // 300) * 300
+        tv_ci = list(range(start_ci, chti_max + 300, 300))
+        tt_ci = [f"{v//60:02d}:00" for v in tv_ci]
+        fig_cih.add_scatter(x=grp_ci['interval'], y=chti_vals,
+            mode='lines+markers', line=dict(color='#7c5cfc', width=2), marker=dict(size=3),
+            text=chti_text, hovertemplate='%{x}<br>CHT: %{text}<extra></extra>',
+            fill='tozeroy', fillcolor='rgba(124,92,252,.08)')
+        fig_cih.update_layout(**PLOT_LAYOUT, title='Chat Handle Time by Interval (MM:SS)', height=220,
+            xaxis=XAXIS_INT, yaxis=dict(**YAXIS_BASE, tickvals=tv_ci, ticktext=tt_ci,
+            range=[start_ci - 60, chti_max + 120]))
+        col_ci2.plotly_chart(fig_cih, use_container_width=True)
+
+        # Interval table
+        tbl_ci = grp_ci[['interval','offered','answered','missed','abn_pct','cht_sec']].copy()
+        tbl_ci.columns = ['Interval','Offered','Answered','Missed','Abandoned %','CHT']
+        tbl_ci['Abandoned %'] = tbl_ci['Abandoned %'].round(1)
+        tbl_ci['CHT'] = tbl_ci['CHT'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+        st.dataframe(tbl_ci, use_container_width=True, hide_index=True,
+            column_config={
+                'Offered':     st.column_config.NumberColumn(format="%d"),
+                'Answered':    st.column_config.NumberColumn(format="%d"),
+                'Missed':      st.column_config.NumberColumn(format="%d"),
+                'Abandoned %': st.column_config.NumberColumn(format="%.1f%%"),
+                'CHT':         st.column_config.TextColumn(),
+            })
+else:
+    st.info("Chat_Data.xlsx not found in repository.")
 
 st.sidebar.markdown("---")
 st.sidebar.caption(f"📊 {len(df):,} rows loaded")
