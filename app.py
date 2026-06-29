@@ -214,9 +214,14 @@ else:
 # ── SIDEBAR FILTERS ───────────────────────────────────────────────────────────
 st.sidebar.markdown("### 🔍 Filters")
 
-# LOB
+# LOB — phone LOBs
 lobs = sorted(raw['lob'].unique())
 sel_lobs = st.sidebar.multiselect("LOB", lobs, default=lobs)
+
+# CHAT LOB filter
+st.sidebar.markdown("**Chat LOB**")
+chat_depts = ['Level 1 Chat', 'Others'] if chat_raw is not None else ['Level 1 Chat']
+sel_chat_lobs = st.sidebar.multiselect("Chat LOB", chat_depts, default=chat_depts)
 
 # Queue (filtered by LOB)
 df_lob = raw[raw['lob'].isin(sel_lobs)] if sel_lobs else raw
@@ -525,11 +530,14 @@ else:
 
 # ── CHAT SECTION ─────────────────────────────────────────────────────────────
 st.markdown("---")
-st.markdown("## 💬 Chat — LOB: CHAT")
+st.markdown("## 💬 Level 1 Chat")
 
 if chat_raw is not None:
     # Apply same date/period filters as phone data
     df_chat = chat_raw.copy()
+    # Apply Chat LOB filter
+    if sel_chat_lobs:
+        df_chat = df_chat[df_chat['department'].isin(sel_chat_lobs)]
     if sel_dates:
         df_chat = df_chat[df_chat['date'].dt.date.isin(sel_dates)]
     elif sel_weeks:
