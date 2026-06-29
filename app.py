@@ -121,7 +121,7 @@ def load_data(file_bytes):
     df2['warranty'] = df2['warranty'].fillna('')
 
     df = df.merge(df2[['queue','lob','warranty']], on='queue', how='left')
-    df['lob']      = df['lob'].fillna('Unknown')
+    df['lob']      = df['lob'].fillna('NA')
     df['warranty'] = df['warranty'].fillna('')
     return df
 
