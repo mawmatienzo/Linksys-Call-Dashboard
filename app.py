@@ -301,9 +301,13 @@ fig_aht.add_scatter(x=agg['label'], y=aht_vals, mode='lines+markers',
     line=dict(color='#7c5cfc', width=2), marker=dict(size=4),
     fill='tozeroy', fillcolor='rgba(124,92,252,.08)',
     text=aht_text, hovertemplate='%{x}<br>AHT: %{text}<extra></extra>')
+# Generate clean evenly-spaced ticks for AHT
+aht_min = int(aht_vals.min()); aht_max = int(aht_vals.max())
+step = max(60, ((aht_max - aht_min) // 5 // 60) * 60) if aht_max > aht_min else 60
+tick_vals = list(range((aht_min // step) * step, aht_max + step, step))
+tick_text = [f"{v//60:02d}:{v%60:02d}" for v in tick_vals]
 fig_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (MM:SS)', height=280,
-    yaxis=dict(**YAXIS_BASE, tickvals=aht_vals.tolist(),
-               ticktext=aht_text.tolist()))
+    yaxis=dict(**YAXIS_BASE, tickvals=tick_vals, ticktext=tick_text))
 col1.plotly_chart(fig_aht, use_container_width=True)
 
 # SL %
@@ -321,9 +325,13 @@ asa_text = asa_vals.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
 fig_asa.add_bar(x=agg['label'], y=asa_vals, marker_color='rgba(245,166,35,.6)',
     marker_line=dict(color='#f5a623', width=1),
     text=asa_text, hovertemplate='%{x}<br>ASA: %{text}<extra></extra>')
+# Generate clean evenly-spaced ticks for ASA
+asa_min = int(asa_vals.min()); asa_max = int(asa_vals.max())
+step_a = max(30, ((asa_max - asa_min) // 5 // 30) * 30) if asa_max > asa_min else 30
+tick_vals_a = list(range((asa_min // step_a) * step_a, asa_max + step_a, step_a))
+tick_text_a = [f"{v//60:02d}:{v%60:02d}" for v in tick_vals_a]
 fig_asa.update_layout(**PLOT_LAYOUT, title='Avg Speed of Answer (MM:SS)', height=280,
-    yaxis=dict(**YAXIS_BASE, tickvals=asa_vals.tolist(),
-               ticktext=asa_text.tolist()))
+    yaxis=dict(**YAXIS_BASE, tickvals=tick_vals_a, ticktext=tick_text_a))
 col2.plotly_chart(fig_asa, use_container_width=True)
 
 # ── DETAIL TABLE ──────────────────────────────────────────────────────────────
