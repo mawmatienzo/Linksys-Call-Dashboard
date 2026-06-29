@@ -64,6 +64,7 @@ def load_data(file_bytes):
     df['Date'] = pd.to_datetime(df['Date'])
     df = df.rename(columns={
         'Split/Queue':   'queue',
+        'Interval':      'interval',
         'Calls Offered': 'offered',
         'Calls Answered':'answered',
         'Talktime':      'talktime',
@@ -78,6 +79,9 @@ def load_data(file_bytes):
     })
     num_cols = ['offered','answered','talktime','answer_time','acw',
                 'abandon','ans_lt30','ans_30','ans_60','ans_90','ans_120']
+    # Clean interval — keep as string HH:MM
+    if 'interval' in df.columns:
+        df['interval'] = df['interval'].astype(str).str[:5]
     for c in num_cols:
         df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
     df['queue'] = df['queue'].astype(int)
@@ -193,21 +197,29 @@ sel_warranty = st.sidebar.multiselect("Warranty", warranties, default=warranties
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📅 Period")
 
+# Date multi-select
+all_dates_raw = sorted(raw['date'].dt.date.unique())
+sel_dates = st.sidebar.multiselect(
+    "Date", all_dates_raw,
+    format_func=lambda d: d.strftime('%Y-%m-%d'),
+    default=[]
+)
+
+# Week Ending multi-select
+all_weeks = sorted(raw['date'].apply(week_ending_saturday).dt.normalize().unique())
+week_labels = {str(w.date()): 'WE ' + pd.Timestamp(w).strftime('%b %d, %Y') for w in all_weeks}
+sel_weeks = st.sidebar.multiselect(
+    "Week Ending", list(week_labels.keys()),
+    format_func=lambda w: week_labels[w],
+    default=[]
+)
+
 # Month multi-select
 all_months = sorted(raw['date'].dt.to_period('M').unique().astype(str))
 month_labels = {m: pd.Period(m).strftime('%B %Y') for m in all_months}
 sel_months = st.sidebar.multiselect(
     "Month", all_months,
     format_func=lambda m: month_labels[m],
-    default=[]
-)
-
-# Week multi-select
-all_weeks = sorted(raw['date'].apply(week_ending_saturday).dt.normalize().unique())
-week_labels = {str(w.date()): 'WE ' + pd.Timestamp(w).strftime('%b %d, %Y') for w in all_weeks}
-sel_weeks = st.sidebar.multiselect(
-    "Week Ending", list(week_labels.keys()),
-    format_func=lambda w: week_labels[w],
     default=[]
 )
 
@@ -223,8 +235,10 @@ if sel_queues:  df = df[df['queue'].isin(sel_queues)]
 if sel_warranty:
     df = df[df['warranty'].isin(sel_warranty) | (df['warranty'] == '')]
 
-# Period filters
-if sel_weeks:
+# Period filters — Date takes priority, then Week, then Month
+if sel_dates:
+    df = df[df['date'].dt.date.isin(sel_dates)]
+elif sel_weeks:
     week_dates = pd.to_datetime(sel_weeks)
     df = df[df['date'].apply(week_ending_saturday).dt.normalize().isin(week_dates)]
 elif sel_months:
@@ -356,6 +370,76 @@ st.dataframe(table, use_container_width=True, hide_index=True,
         'ASA':        st.column_config.TextColumn(),
         'SL ≤120s %': st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100),
     })
+
+# ── PER INTERVAL TABLE ───────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown("### ⏱ Per Interval Data")
+
+# Date filter for interval table
+all_dates = sorted(df['date'].dt.date.unique())
+date_options = ["-- All Dates --"] + [str(d) for d in all_dates]
+
+col_if1, col_if2, col_if3 = st.columns([1,1,4])
+with col_if1:
+    sel_date_from = st.selectbox("Date From", date_options, index=0, key="int_from")
+with col_if2:
+    sel_date_to   = st.selectbox("Date To",   date_options, index=0, key="int_to")
+
+# Apply date filter
+df_int = df.copy()
+if sel_date_from != "-- All Dates --":
+    df_int = df_int[df_int['date'].dt.date >= pd.to_datetime(sel_date_from).date()]
+if sel_date_to != "-- All Dates --":
+    df_int = df_int[df_int['date'].dt.date <= pd.to_datetime(sel_date_to).date()]
+
+# Also apply skill filters from sidebar
+if sel_lobs:    df_int = df_int[df_int['lob'].isin(sel_lobs)]
+if sel_queues:  df_int = df_int[df_int['queue'].isin(sel_queues)]
+if sel_warranty:
+    df_int = df_int[df_int['warranty'].isin(sel_warranty) | (df_int['warranty'] == '')]
+
+# Aggregate by interval
+if 'interval' in df_int.columns:
+    grp_int = df_int.groupby('interval', sort=True).agg(
+        offered    =('offered',    'sum'),
+        answered   =('answered',   'sum'),
+        abandon    =('abandon',    'sum'),
+        talktime   =('talktime',   'sum'),
+        acw        =('acw',        'sum'),
+        answer_time=('answer_time','sum'),
+        ans_lt30   =('ans_lt30',   'sum'),
+        ans_30     =('ans_30',     'sum'),
+        ans_60     =('ans_60',     'sum'),
+        ans_90     =('ans_90',     'sum'),
+        ans_120    =('ans_120',    'sum'),
+    ).reset_index()
+
+    grp_int['aht_sec'] = np.where(grp_int['answered']>0, (grp_int['talktime']+grp_int['acw'])/grp_int['answered'], 0)
+    grp_int['asa']     = np.where(grp_int['answered']>0, grp_int['answer_time']/grp_int['answered'], 0)
+    grp_int['abn_pct'] = np.where(grp_int['offered']>0,  grp_int['abandon']/grp_int['offered']*100, 0)
+    grp_int['sl_120']  = np.where(grp_int['answered']>0,
+        (grp_int['ans_lt30']+grp_int['ans_30']+grp_int['ans_60']+grp_int['ans_90']+grp_int['ans_120'])/grp_int['answered']*100, 0)
+
+    tbl_int = grp_int[['interval','offered','answered','abandon','abn_pct','aht_sec','asa','sl_120']].copy()
+    tbl_int.columns = ['Interval','Offered','Answered','Abandoned','Abn %','AHT','ASA','SL ≤120s %']
+    tbl_int['Abn %']      = tbl_int['Abn %'].round(1)
+    tbl_int['AHT']        = tbl_int['AHT'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+    tbl_int['ASA']        = tbl_int['ASA'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+    tbl_int['SL ≤120s %'] = tbl_int['SL ≤120s %'].round(1)
+
+    st.dataframe(tbl_int, use_container_width=True, hide_index=True,
+        column_config={
+            'Interval':   st.column_config.TextColumn(),
+            'Offered':    st.column_config.NumberColumn(format="%d"),
+            'Answered':   st.column_config.NumberColumn(format="%d"),
+            'Abandoned':  st.column_config.NumberColumn(format="%d"),
+            'Abn %':      st.column_config.NumberColumn(format="%.1f%%"),
+            'AHT':        st.column_config.TextColumn(),
+            'ASA':        st.column_config.TextColumn(),
+            'SL ≤120s %': st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100),
+        })
+else:
+    st.info("Interval column not found in uploaded data.")
 
 st.sidebar.markdown("---")
 st.sidebar.caption(f"📊 {len(df):,} rows loaded")
