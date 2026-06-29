@@ -214,14 +214,13 @@ else:
 # ── SIDEBAR FILTERS ───────────────────────────────────────────────────────────
 st.sidebar.markdown("### 🔍 Filters")
 
-# LOB — phone LOBs
+# LOB — phone + CHAT combined
 lobs = sorted(raw['lob'].unique())
-sel_lobs = st.sidebar.multiselect("LOB", lobs, default=lobs)
-
-# CHAT LOB filter
-st.sidebar.markdown("**Chat LOB**")
-chat_depts = ['Level 1 Chat', 'Others'] if chat_raw is not None else ['Level 1 Chat']
-sel_chat_lobs = st.sidebar.multiselect("Chat LOB", chat_depts, default=chat_depts)
+all_lobs = lobs + (['CHAT'] if chat_raw is not None else [])
+sel_lobs = st.sidebar.multiselect("LOB", all_lobs, default=all_lobs)
+# Separate phone vs chat selections
+sel_phone_lobs = [l for l in sel_lobs if l != 'CHAT']
+sel_chat_selected = 'CHAT' in sel_lobs
 
 # Queue (filtered by LOB)
 df_lob = raw[raw['lob'].isin(sel_lobs)] if sel_lobs else raw
@@ -268,7 +267,7 @@ gran = st.sidebar.selectbox("📊 Group By", ["Daily","Weekly","Monthly"], index
 df = raw.copy()
 
 # Skill filters
-if sel_lobs:    df = df[df['lob'].isin(sel_lobs)]
+if sel_phone_lobs: df = df[df['lob'].isin(sel_phone_lobs)]
 if sel_queues:  df = df[df['queue'].isin(sel_queues)]
 if sel_warranty:
     df = df[df['warranty'].isin(sel_warranty) | (df['warranty'] == '')]
@@ -532,12 +531,8 @@ else:
 st.markdown("---")
 st.markdown("## 💬 Level 1 Chat")
 
-if chat_raw is not None:
-    # Apply same date/period filters as phone data
+if chat_raw is not None and sel_chat_selected:
     df_chat = chat_raw.copy()
-    # Apply Chat LOB filter
-    if sel_chat_lobs:
-        df_chat = df_chat[df_chat['department'].isin(sel_chat_lobs)]
     if sel_dates:
         df_chat = df_chat[df_chat['date'].dt.date.isin(sel_dates)]
     elif sel_weeks:
@@ -693,8 +688,10 @@ if chat_raw is not None:
                 'Abandoned %': st.column_config.NumberColumn(format="%.1f%%"),
                 'CHT':         st.column_config.TextColumn(),
             })
-else:
+elif chat_raw is None:
     st.info("Chat_Data.xlsx not found in repository.")
+else:
+    st.info("Select CHAT in the LOB filter to view chat data.")
 
 st.sidebar.markdown("---")
 st.sidebar.caption(f"📊 {len(df):,} rows loaded")
