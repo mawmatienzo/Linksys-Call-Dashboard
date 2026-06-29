@@ -154,13 +154,25 @@ YAXIS_BASE = dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148')
 st.sidebar.markdown("## 📞 Call Centre Dashboard")
 st.sidebar.markdown("---")
 
-uploaded = st.sidebar.file_uploader("⬆ Upload Excel File", type=['xlsx','xls'])
+import os, urllib.request
 
-if uploaded:
-    raw = load_data(uploaded.read())
+# Try to load data from the repo file, fallback to upload
+DATA_FILE = 'Phone_Data.xlsx'
+
+@st.cache_data(show_spinner="Loading data...")
+def load_from_file(path):
+    with open(path, 'rb') as f:
+        return load_data(f.read())
+
+if os.path.exists(DATA_FILE):
+    raw = load_from_file(DATA_FILE)
 else:
-    st.info("👈 Upload your **Phone_Data.xlsx** file in the sidebar to get started.")
-    st.stop()
+    uploaded = st.sidebar.file_uploader("⬆ Upload Excel File", type=['xlsx','xls'])
+    if uploaded:
+        raw = load_data(uploaded.read())
+    else:
+        st.info("👈 Upload your **Phone_Data.xlsx** file in the sidebar to get started.")
+        st.stop()
 
 # ── SIDEBAR FILTERS ───────────────────────────────────────────────────────────
 st.sidebar.markdown("### 🔍 Filters")
@@ -334,4 +346,4 @@ st.dataframe(table, use_container_width=True, hide_index=True,
     })
 
 st.sidebar.markdown("---")
-st.sidebar.caption(f"📁 {uploaded.name}  |  {len(df):,} rows loaded")
+st.sidebar.caption(f"📊 {len(df):,} rows loaded")
