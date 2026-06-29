@@ -147,12 +147,13 @@ def aggregate(df, gran):
 PLOT_LAYOUT = dict(
     paper_bgcolor='#1a1d27', plot_bgcolor='#1a1d27',
     font=dict(color='#e8eaf0', family='Segoe UI, system-ui, sans-serif', size=11),
-    xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148'),
     margin=dict(l=10, r=10, t=30, b=10),
     legend=dict(bgcolor='#1a1d27', bordercolor='#2d3148'),
     hoverlabel=dict(bgcolor='#222637', bordercolor='#2d3148'),
 )
+XAXIS_BASE = dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148')
 YAXIS_BASE = dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148')
+XAXIS_INT  = dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148', tickangle=45)
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 st.sidebar.markdown("## 📞 Call Centre Dashboard")
@@ -294,7 +295,7 @@ fig_vol.add_scatter(x=agg['label'], y=agg['answered'], name='Answered',
     mode='lines+markers', line=dict(color='#22d3a0', width=2), marker=dict(size=4))
 fig_vol.add_scatter(x=agg['label'], y=agg['abandon'],  name='Abandoned',
     mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=4))
-fig_vol.update_layout(**PLOT_LAYOUT, title='Call Volume', height=300, yaxis=YAXIS_BASE)
+fig_vol.update_layout(**PLOT_LAYOUT, title='Call Volume', height=300, xaxis=XAXIS_BASE, yaxis=YAXIS_BASE)
 st.plotly_chart(fig_vol, use_container_width=True)
 
 col1, col2 = st.columns(2)
@@ -304,7 +305,7 @@ fig_abn = go.Figure()
 fig_abn.add_scatter(x=agg['label'], y=agg['abn_pct'].round(1), mode='lines+markers',
     line=dict(color='#f7564a', width=2), marker=dict(size=4),
     fill='tozeroy', fillcolor='rgba(247,86,74,.08)')
-fig_abn.update_layout(**PLOT_LAYOUT, title='Abandon Rate %', height=280, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
+fig_abn.update_layout(**PLOT_LAYOUT, title='Abandon Rate %', height=280, xaxis=XAXIS_BASE, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
 col1.plotly_chart(fig_abn, use_container_width=True)
 
 # AHT
@@ -331,7 +332,7 @@ fig_sl = go.Figure()
 fig_sl.add_scatter(x=agg['label'], y=agg['cum_120'].round(1), name='≤120s',
     mode='lines+markers', line=dict(color='#a78bfa', width=2), marker=dict(size=4),
     fill='tozeroy', fillcolor='rgba(167,139,250,.08)')
-fig_sl.update_layout(**PLOT_LAYOUT, title='Service Level %', height=280, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
+fig_sl.update_layout(**PLOT_LAYOUT, title='Service Level %', height=280, xaxis=XAXIS_BASE, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
 col2.plotly_chart(fig_sl, use_container_width=True)
 
 # ASA
@@ -448,7 +449,7 @@ if 'interval' in df_int.columns:
     fig_int_vol.add_scatter(x=grp_int['interval'], y=grp_int['abandon'],  name='Abandoned',
         mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=4))
     fig_int_vol.update_layout(**PLOT_LAYOUT, height=280, yaxis=YAXIS_BASE,
-        xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickangle=45))
+        xaxis=XAXIS_INT)
     st.plotly_chart(fig_int_vol, use_container_width=True)
 
     col_ig1, col_ig2, col_ig3 = st.columns(3)
@@ -460,7 +461,7 @@ if 'interval' in df_int.columns:
         fill='tozeroy', fillcolor='rgba(247,86,74,.08)')
     fig_int_abn.update_layout(**PLOT_LAYOUT, title='Abandon Rate %', height=220,
         yaxis=dict(**YAXIS_BASE, ticksuffix='%'),
-        xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickangle=45))
+        xaxis=XAXIS_INT)
     col_ig1.plotly_chart(fig_int_abn, use_container_width=True)
 
     # AHT
@@ -477,7 +478,7 @@ if 'interval' in df_int.columns:
         fill='tozeroy', fillcolor='rgba(124,92,252,.08)')
     fig_int_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (MM:SS)', height=220,
         yaxis=dict(**YAXIS_BASE, tickvals=tv_i, ticktext=tt_i, range=[start_i-60, aht_i_max+120]),
-        xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickangle=45))
+        xaxis=XAXIS_INT)
     col_ig2.plotly_chart(fig_int_aht, use_container_width=True)
 
     # ASA
@@ -494,7 +495,7 @@ if 'interval' in df_int.columns:
         fill='tozeroy', fillcolor='rgba(245,166,35,.08)')
     fig_int_asa.update_layout(**PLOT_LAYOUT, title='Avg Speed of Answer (MM:SS)', height=220,
         yaxis=dict(**YAXIS_BASE, tickvals=tv_ia, ticktext=tt_ia, range=[start_ia-60, asa_i_max+120]),
-        xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickangle=45))
+        xaxis=XAXIS_INT)
     col_ig3.plotly_chart(fig_int_asa, use_container_width=True)
 
     # SL
@@ -504,7 +505,7 @@ if 'interval' in df_int.columns:
         fill='tozeroy', fillcolor='rgba(167,139,250,.08)')
     fig_int_sl.update_layout(**PLOT_LAYOUT, title='Service Level ≤120s %', height=220,
         yaxis=dict(**YAXIS_BASE, ticksuffix='%'),
-        xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickangle=45))
+        xaxis=XAXIS_INT)
     col_ig1.plotly_chart(fig_int_sl, use_container_width=True)
 
 else:
