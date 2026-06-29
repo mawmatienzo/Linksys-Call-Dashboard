@@ -185,19 +185,19 @@ import os, urllib.request
 DATA_FILE = 'Phone_Data.xlsx'
 
 @st.cache_data(show_spinner="Loading data...")
-def load_from_file(path):
+def load_from_file(path, mtime):
     with open(path, 'rb') as f:
         return load_data(f.read())
 
 CHAT_FILE = 'Chat_Data.xlsx'
 
 @st.cache_data(show_spinner="Loading chat data...")
-def load_chat_file(path):
+def load_chat_file(path, mtime):
     with open(path, 'rb') as f:
         return load_chat_data(f.read())
 
 if os.path.exists(DATA_FILE):
-    raw = load_from_file(DATA_FILE)
+    raw = load_from_file(DATA_FILE, os.path.getmtime(DATA_FILE))
 else:
     uploaded = st.sidebar.file_uploader("⬆ Upload Excel File", type=['xlsx','xls'])
     if uploaded:
@@ -207,7 +207,7 @@ else:
         st.stop()
 
 if os.path.exists(CHAT_FILE):
-    chat_raw = load_chat_file(CHAT_FILE)
+    chat_raw = load_chat_file(CHAT_FILE, os.path.getmtime(CHAT_FILE))
 else:
     chat_raw = None
 
