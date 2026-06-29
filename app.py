@@ -276,7 +276,7 @@ fig_abn.add_scatter(x=agg['label'], y=agg['abn_pct'].round(1), mode='lines+marke
     line=dict(color='#f7564a', width=2), marker=dict(size=4),
     fill='tozeroy', fillcolor='rgba(247,86,74,.08)')
 fig_abn.update_layout(**PLOT_LAYOUT, title='Abandon Rate %', height=280,
-    yaxis=dict(**PLOT_LAYOUT['yaxis'], ticksuffix='%'))
+    yaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148', ticksuffix='%'))
 col1.plotly_chart(fig_abn, use_container_width=True)
 
 # AHT
@@ -285,7 +285,7 @@ fig_aht.add_scatter(x=agg['label'], y=agg['aht_sec'].round(0), mode='lines+marke
     line=dict(color='#7c5cfc', width=2), marker=dict(size=4),
     fill='tozeroy', fillcolor='rgba(124,92,252,.08)')
 fig_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (seconds)', height=280,
-    yaxis=dict(**PLOT_LAYOUT['yaxis'], tickformat='.0f'))
+    yaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148', tickformat='.0f'))
 col1.plotly_chart(fig_aht, use_container_width=True)
 
 # SL %
@@ -295,7 +295,7 @@ fig_sl.add_scatter(x=agg['label'], y=agg['cum_60'].round(1),  name='≤60s',  mo
 fig_sl.add_scatter(x=agg['label'], y=agg['cum_90'].round(1),  name='≤90s',  mode='lines', line=dict(color='#4f8ef7', width=2))
 fig_sl.add_scatter(x=agg['label'], y=agg['cum_120'].round(1), name='≤120s', mode='lines', line=dict(color='#a78bfa', width=2))
 fig_sl.update_layout(**PLOT_LAYOUT, title='Service Level %', height=280,
-    yaxis=dict(**PLOT_LAYOUT['yaxis'], ticksuffix='%'))
+    yaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148', ticksuffix='%'))
 col2.plotly_chart(fig_sl, use_container_width=True)
 
 # ASA
