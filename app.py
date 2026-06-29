@@ -305,6 +305,16 @@ avg_abn  = tot_abn / tot_off * 100 if tot_off > 0 else 0
 avg_sl   = (df['ans_lt30']+df['ans_30']+df['ans_60']+df['ans_90']+df['ans_120']).sum() / max(tot_ans,1) * 100
 avg_asa  = df['answer_time'].sum() / max(tot_ans, 1)
 
+def kpi(col, label, value, sub, color, badge=None):
+    badge_html = f'<div class="{badge[1]}">{badge[0]}</div>' if badge else ''
+    col.markdown(f"""
+<div class="metric-card" style="border-top: 3px solid {color}">
+  <div class="metric-label">{label}</div>
+  <div class="metric-value" style="color:{color}">{value}</div>
+  <div class="metric-sub">{sub}</div>
+  {badge_html}
+</div>""", unsafe_allow_html=True)
+
 if show_phone:
     st.markdown("### 📊 Summary")
     c1,c2,c3,c4,c5,c6,c7 = st.columns(7)
