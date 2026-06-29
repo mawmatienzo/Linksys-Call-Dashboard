@@ -280,50 +280,57 @@ col1.plotly_chart(fig_abn, use_container_width=True)
 
 # AHT
 fig_aht = go.Figure()
-fig_aht.add_scatter(x=agg['label'], y=agg['aht_sec'].round(0), mode='lines+markers',
+aht_vals = agg['aht_sec'].round(0)
+aht_text = aht_vals.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+fig_aht.add_scatter(x=agg['label'], y=aht_vals, mode='lines+markers',
     line=dict(color='#7c5cfc', width=2), marker=dict(size=4),
-    fill='tozeroy', fillcolor='rgba(124,92,252,.08)')
-fig_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (seconds)', height=280, yaxis=dict(**YAXIS_BASE, tickformat='.0f'))
+    fill='tozeroy', fillcolor='rgba(124,92,252,.08)',
+    text=aht_text, hovertemplate='%{x}<br>AHT: %{text}<extra></extra>')
+fig_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (MM:SS)', height=280,
+    yaxis=dict(**YAXIS_BASE, tickvals=aht_vals.tolist(),
+               ticktext=aht_text.tolist()))
 col1.plotly_chart(fig_aht, use_container_width=True)
 
 # SL %
 fig_sl = go.Figure()
-fig_sl.add_scatter(x=agg['label'], y=agg['cum_30'].round(1),  name='≤30s',  mode='lines', line=dict(color='#22d3a0', width=2))
-fig_sl.add_scatter(x=agg['label'], y=agg['cum_60'].round(1),  name='≤60s',  mode='lines', line=dict(color='#22d3ee', width=2))
-fig_sl.add_scatter(x=agg['label'], y=agg['cum_90'].round(1),  name='≤90s',  mode='lines', line=dict(color='#4f8ef7', width=2))
-fig_sl.add_scatter(x=agg['label'], y=agg['cum_120'].round(1), name='≤120s', mode='lines', line=dict(color='#a78bfa', width=2))
+fig_sl.add_scatter(x=agg['label'], y=agg['cum_120'].round(1), name='≤120s',
+    mode='lines+markers', line=dict(color='#a78bfa', width=2), marker=dict(size=4),
+    fill='tozeroy', fillcolor='rgba(167,139,250,.08)')
 fig_sl.update_layout(**PLOT_LAYOUT, title='Service Level %', height=280, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
 col2.plotly_chart(fig_sl, use_container_width=True)
 
 # ASA
 fig_asa = go.Figure()
-fig_asa.add_bar(x=agg['label'], y=agg['asa'].round(0), marker_color='rgba(245,166,35,.6)',
-    marker_line=dict(color='#f5a623', width=1))
-fig_asa.update_layout(**PLOT_LAYOUT, title='Avg Speed of Answer (seconds)', height=280, yaxis=YAXIS_BASE)
+asa_vals = agg['asa'].round(0)
+asa_text = asa_vals.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+fig_asa.add_bar(x=agg['label'], y=asa_vals, marker_color='rgba(245,166,35,.6)',
+    marker_line=dict(color='#f5a623', width=1),
+    text=asa_text, hovertemplate='%{x}<br>ASA: %{text}<extra></extra>')
+fig_asa.update_layout(**PLOT_LAYOUT, title='Avg Speed of Answer (MM:SS)', height=280,
+    yaxis=dict(**YAXIS_BASE, tickvals=asa_vals.tolist(),
+               ticktext=asa_text.tolist()))
 col2.plotly_chart(fig_asa, use_container_width=True)
 
 # ── DETAIL TABLE ──────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("### 📋 Detailed Data")
 
-table = agg[['label','offered','answered','abandon','abn_pct','aht_sec','asa','cum_30','cum_60','cum_90','cum_120']].copy()
-table.columns = ['Period','Offered','Answered','Abandoned','Abn %','AHT (s)','ASA (s)','≤30s %','≤60s %','≤90s %','≤120s %']
-table['Abn %']   = table['Abn %'].round(1)
-table['AHT (s)'] = table['AHT (s)'].round(0).astype(int)
-table['ASA (s)'] = table['ASA (s)'].round(0).astype(int)
-for c in ['≤30s %','≤60s %','≤90s %','≤120s %']:
-    table[c] = table[c].round(1)
+table = agg[['label','offered','answered','abandon','abn_pct','aht_sec','asa','cum_120']].copy()
+table.columns = ['Period','Offered','Answered','Abandoned','Abn %','AHT','ASA','SL ≤120s %']
+table['Abn %']      = table['Abn %'].round(1)
+table['AHT']        = table['AHT'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+table['ASA']        = table['ASA'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+table['SL ≤120s %'] = table['SL ≤120s %'].round(1)
 
 st.dataframe(table, use_container_width=True, hide_index=True,
     column_config={
-        'Offered':   st.column_config.NumberColumn(format="%d"),
-        'Answered':  st.column_config.NumberColumn(format="%d"),
-        'Abandoned': st.column_config.NumberColumn(format="%d"),
-        'Abn %':     st.column_config.NumberColumn(format="%.1f%%"),
-        '≤30s %':    st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100),
-        '≤60s %':    st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100),
-        '≤90s %':    st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100),
-        '≤120s %':   st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100),
+        'Offered':    st.column_config.NumberColumn(format="%d"),
+        'Answered':   st.column_config.NumberColumn(format="%d"),
+        'Abandoned':  st.column_config.NumberColumn(format="%d"),
+        'Abn %':      st.column_config.NumberColumn(format="%.1f%%"),
+        'AHT':        st.column_config.TextColumn(),
+        'ASA':        st.column_config.TextColumn(),
+        'SL ≤120s %': st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100),
     })
 
 st.sidebar.markdown("---")
