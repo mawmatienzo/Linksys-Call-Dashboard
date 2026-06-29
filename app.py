@@ -199,7 +199,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### 📅 Period")
 
 # Date multi-select
-all_dates_raw = sorted(raw['date'].dt.date.unique())
+all_dates_raw = sorted(raw['date'].dt.date.unique(), reverse=True)
 sel_dates = st.sidebar.multiselect(
     "Date", all_dates_raw,
     format_func=lambda d: d.strftime('%Y-%m-%d'),
@@ -207,7 +207,7 @@ sel_dates = st.sidebar.multiselect(
 )
 
 # Week Ending multi-select
-all_weeks = sorted(raw['date'].apply(week_ending_saturday).dt.normalize().unique())
+all_weeks = sorted(raw['date'].apply(week_ending_saturday).dt.normalize().unique(), reverse=True)
 week_labels = {str(w.date()): 'WE ' + pd.Timestamp(w).strftime('%b %d, %Y') for w in all_weeks}
 sel_weeks = st.sidebar.multiselect(
     "Week Ending", list(week_labels.keys()),
@@ -216,7 +216,7 @@ sel_weeks = st.sidebar.multiselect(
 )
 
 # Month multi-select
-all_months = sorted(raw['date'].dt.to_period('M').unique().astype(str))
+all_months = sorted(raw['date'].dt.to_period('M').unique().astype(str), reverse=True)
 month_labels = {m: pd.Period(m).strftime('%B %Y') for m in all_months}
 sel_months = st.sidebar.multiselect(
     "Month", all_months,
