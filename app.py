@@ -301,12 +301,15 @@ fig_aht.add_scatter(x=agg['label'], y=aht_vals, mode='lines+markers',
     line=dict(color='#7c5cfc', width=2), marker=dict(size=4),
     fill='tozeroy', fillcolor='rgba(124,92,252,.08)',
     text=aht_text, hovertemplate='%{x}<br>AHT: %{text}<extra></extra>')
-aht_min = int(aht_vals.min() * 0.97)
-aht_max = int(aht_vals.max() * 1.03)
-tick_vals = [int(aht_min + i*(aht_max-aht_min)/4) for i in range(5)]
-tick_text = [f"{v//60:02d}:{v%60:02d}" for v in tick_vals]
+# Every 5 minutes (300 seconds)
+aht_min = int(aht_vals.min())
+aht_max = int(aht_vals.max())
+start_tick = (aht_min // 300) * 300
+tick_vals = list(range(start_tick, aht_max + 300, 300))
+tick_text = [f"{v//60:02d}:00" for v in tick_vals]
 fig_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (MM:SS)', height=280,
-    yaxis=dict(**YAXIS_BASE, tickvals=tick_vals, ticktext=tick_text, range=[aht_min, aht_max]))
+    yaxis=dict(**YAXIS_BASE, tickvals=tick_vals, ticktext=tick_text,
+               range=[start_tick - 60, aht_max + 120]))
 col1.plotly_chart(fig_aht, use_container_width=True)
 
 # SL %
