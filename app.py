@@ -274,10 +274,13 @@ st.markdown("---")
 # ── CHARTS ────────────────────────────────────────────────────────────────────
 # Volume chart
 fig_vol = go.Figure()
-fig_vol.add_bar(x=agg['label'], y=agg['offered'],  name='Offered',   marker_color='rgba(79,142,247,.6)')
-fig_vol.add_bar(x=agg['label'], y=agg['answered'], name='Answered',  marker_color='rgba(34,211,160,.6)')
-fig_vol.add_bar(x=agg['label'], y=agg['abandon'],  name='Abandoned', marker_color='rgba(247,86,74,.6)')
-fig_vol.update_layout(**PLOT_LAYOUT, title='Call Volume', barmode='group', height=300, yaxis=YAXIS_BASE)
+fig_vol.add_scatter(x=agg['label'], y=agg['offered'],  name='Offered',
+    mode='lines+markers', line=dict(color='#4f8ef7', width=2), marker=dict(size=4))
+fig_vol.add_scatter(x=agg['label'], y=agg['answered'], name='Answered',
+    mode='lines+markers', line=dict(color='#22d3a0', width=2), marker=dict(size=4))
+fig_vol.add_scatter(x=agg['label'], y=agg['abandon'],  name='Abandoned',
+    mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=4))
+fig_vol.update_layout(**PLOT_LAYOUT, title='Call Volume', height=300, yaxis=YAXIS_BASE)
 st.plotly_chart(fig_vol, use_container_width=True)
 
 col1, col2 = st.columns(2)
