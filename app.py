@@ -438,6 +438,75 @@ if 'interval' in df_int.columns:
             'ASA':        st.column_config.TextColumn(),
             'SL ≤120s %': st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100),
         })
+    # ── Per Interval Line Charts ─────────────────────────────────────────────
+    st.markdown("#### Call Volume by Interval")
+    fig_int_vol = go.Figure()
+    fig_int_vol.add_scatter(x=grp_int['interval'], y=grp_int['offered'],  name='Offered',
+        mode='lines+markers', line=dict(color='#4f8ef7', width=2), marker=dict(size=4))
+    fig_int_vol.add_scatter(x=grp_int['interval'], y=grp_int['answered'], name='Answered',
+        mode='lines+markers', line=dict(color='#22d3a0', width=2), marker=dict(size=4))
+    fig_int_vol.add_scatter(x=grp_int['interval'], y=grp_int['abandon'],  name='Abandoned',
+        mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=4))
+    fig_int_vol.update_layout(**PLOT_LAYOUT, height=280, yaxis=YAXIS_BASE,
+        xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickangle=45))
+    st.plotly_chart(fig_int_vol, use_container_width=True)
+
+    col_ig1, col_ig2, col_ig3 = st.columns(3)
+
+    # Abandon %
+    fig_int_abn = go.Figure()
+    fig_int_abn.add_scatter(x=grp_int['interval'], y=grp_int['abn_pct'].round(1),
+        mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=3),
+        fill='tozeroy', fillcolor='rgba(247,86,74,.08)')
+    fig_int_abn.update_layout(**PLOT_LAYOUT, title='Abandon Rate %', height=220,
+        yaxis=dict(**YAXIS_BASE, ticksuffix='%'),
+        xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickangle=45))
+    col_ig1.plotly_chart(fig_int_abn, use_container_width=True)
+
+    # AHT
+    fig_int_aht = go.Figure()
+    aht_i = grp_int['aht_sec'].round(0)
+    aht_i_min = int(aht_i.min()); aht_i_max = int(aht_i.max())
+    start_i = (aht_i_min // 300) * 300
+    tv_i = list(range(start_i, aht_i_max + 300, 300))
+    tt_i = [f"{v//60:02d}:00" for v in tv_i]
+    aht_i_text = aht_i.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+    fig_int_aht.add_scatter(x=grp_int['interval'], y=aht_i,
+        mode='lines+markers', line=dict(color='#7c5cfc', width=2), marker=dict(size=3),
+        text=aht_i_text, hovertemplate='%{x}<br>AHT: %{text}<extra></extra>',
+        fill='tozeroy', fillcolor='rgba(124,92,252,.08)')
+    fig_int_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (MM:SS)', height=220,
+        yaxis=dict(**YAXIS_BASE, tickvals=tv_i, ticktext=tt_i, range=[start_i-60, aht_i_max+120]),
+        xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickangle=45))
+    col_ig2.plotly_chart(fig_int_aht, use_container_width=True)
+
+    # ASA
+    fig_int_asa = go.Figure()
+    asa_i = grp_int['asa'].round(0)
+    asa_i_min = int(asa_i.min()); asa_i_max = int(asa_i.max())
+    start_ia = (asa_i_min // 300) * 300
+    tv_ia = list(range(start_ia, asa_i_max + 300, 300))
+    tt_ia = [f"{v//60:02d}:00" for v in tv_ia]
+    asa_i_text = asa_i.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+    fig_int_asa.add_scatter(x=grp_int['interval'], y=asa_i,
+        mode='lines+markers', line=dict(color='#f5a623', width=2), marker=dict(size=3),
+        text=asa_i_text, hovertemplate='%{x}<br>ASA: %{text}<extra></extra>',
+        fill='tozeroy', fillcolor='rgba(245,166,35,.08)')
+    fig_int_asa.update_layout(**PLOT_LAYOUT, title='Avg Speed of Answer (MM:SS)', height=220,
+        yaxis=dict(**YAXIS_BASE, tickvals=tv_ia, ticktext=tt_ia, range=[start_ia-60, asa_i_max+120]),
+        xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickangle=45))
+    col_ig3.plotly_chart(fig_int_asa, use_container_width=True)
+
+    # SL
+    fig_int_sl = go.Figure()
+    fig_int_sl.add_scatter(x=grp_int['interval'], y=grp_int['sl_120'].round(1),
+        mode='lines+markers', line=dict(color='#a78bfa', width=2), marker=dict(size=3),
+        fill='tozeroy', fillcolor='rgba(167,139,250,.08)')
+    fig_int_sl.update_layout(**PLOT_LAYOUT, title='Service Level ≤120s %', height=220,
+        yaxis=dict(**YAXIS_BASE, ticksuffix='%'),
+        xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickangle=45))
+    col_ig1.plotly_chart(fig_int_sl, use_container_width=True)
+
 else:
     st.info("Interval column not found in uploaded data.")
 
