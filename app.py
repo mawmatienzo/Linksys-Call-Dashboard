@@ -267,7 +267,15 @@ gran = st.sidebar.selectbox("📊 Group By", ["Daily","Weekly","Monthly"], index
 df = raw.copy()
 
 # Skill filters
-if sel_phone_lobs: df = df[df['lob'].isin(sel_phone_lobs)]
+# Only apply phone filter if phone LOBs are selected
+# If ONLY CHAT is selected, filter phone df to nothing
+only_chat_selected = sel_chat_selected and len(sel_phone_lobs) == 0
+only_phone_selected = not sel_chat_selected and len(sel_phone_lobs) > 0
+show_phone = not only_chat_selected
+show_chat  = sel_chat_selected
+
+if sel_phone_lobs and show_phone:
+    df = df[df['lob'].isin(sel_phone_lobs)]
 if sel_queues:  df = df[df['queue'].isin(sel_queues)]
 if sel_warranty:
     df = df[df['warranty'].isin(sel_warranty) | (df['warranty'] == '')]
@@ -297,156 +305,109 @@ avg_abn  = tot_abn / tot_off * 100 if tot_off > 0 else 0
 avg_sl   = (df['ans_lt30']+df['ans_30']+df['ans_60']+df['ans_90']+df['ans_120']).sum() / max(tot_ans,1) * 100
 avg_asa  = df['answer_time'].sum() / max(tot_ans, 1)
 
-st.markdown("### 📊 Summary")
-c1,c2,c3,c4,c5,c6,c7 = st.columns(7)
-
-def kpi(col, label, value, sub, color, badge=None):
-    badge_html = f'<div class="{badge[1]}">{badge[0]}</div>' if badge else ''
-    col.markdown(f"""
-    <div class="metric-card" style="border-top: 3px solid {color}">
-      <div class="metric-label">{label}</div>
-      <div class="metric-value" style="color:{color}">{value}</div>
-      <div class="metric-sub">{sub}</div>
-      {badge_html}
-    </div>""", unsafe_allow_html=True)
-
-kpi(c1, "Calls Offered",    f"{tot_off:,}",          "Total inbound",          "#4f8ef7")
-kpi(c2, "Calls Answered",   f"{tot_ans:,}",           f"{ans_rate:.1f}% answer rate", "#22d3a0")
-kpi(c3, "Calls Abandoned",  f"{tot_abn:,}",           "Did not reach agent",    "#f7564a")
-kpi(c4, "Abandon Rate",     f"{avg_abn:.1f}%",        "of offered calls",       "#f7564a" if avg_abn>15 else "#f5a623" if avg_abn>10 else "#22d3a0",
-    ("High","badge-bad") if avg_abn>15 else ("Watch","badge-warn") if avg_abn>10 else ("OK","badge-good"))
-kpi(c5, "Avg Handle Time",  fmt_mmss(avg_aht),        "(Talk + ACW) ÷ Calls",   "#7c5cfc")
-kpi(c6, "SL ≤120s",         f"{avg_sl:.1f}%",         "% answered within 120s", "#22d3a0" if avg_sl>=80 else "#f5a623" if avg_sl>=50 else "#f7564a",
-    ("Target Met","badge-good") if avg_sl>=80 else ("Near Target","badge-warn") if avg_sl>=50 else ("Below Target","badge-bad"))
-kpi(c7, "Avg Speed of Answer", fmt_mmss(avg_asa),     "Ring to pickup",         "#22d3a0" if avg_asa<=30 else "#f5a623" if avg_asa<=60 else "#f7564a")
-
-st.markdown("---")
-
-# ── CHARTS ────────────────────────────────────────────────────────────────────
-# Volume chart
-fig_vol = go.Figure()
-fig_vol.add_scatter(x=agg['label'], y=agg['offered'],  name='Offered',
-    mode='lines+markers', line=dict(color='#4f8ef7', width=2), marker=dict(size=4))
-fig_vol.add_scatter(x=agg['label'], y=agg['answered'], name='Answered',
-    mode='lines+markers', line=dict(color='#22d3a0', width=2), marker=dict(size=4))
-fig_vol.add_scatter(x=agg['label'], y=agg['abandon'],  name='Abandoned',
-    mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=4))
-fig_vol.update_layout(**PLOT_LAYOUT, title='Call Volume', height=300, xaxis=XAXIS_BASE, yaxis=YAXIS_BASE)
-st.plotly_chart(fig_vol, use_container_width=True)
-
-col1, col2 = st.columns(2)
-
-# Abandon %
-fig_abn = go.Figure()
-fig_abn.add_scatter(x=agg['label'], y=agg['abn_pct'].round(1), mode='lines+markers',
-    line=dict(color='#f7564a', width=2), marker=dict(size=4),
-    fill='tozeroy', fillcolor='rgba(247,86,74,.08)')
-fig_abn.update_layout(**PLOT_LAYOUT, title='Abandon Rate %', height=280, xaxis=XAXIS_BASE, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
-col1.plotly_chart(fig_abn, use_container_width=True)
-
-# AHT
-fig_aht = go.Figure()
-aht_vals = agg['aht_sec'].round(0)
-aht_text = aht_vals.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
-fig_aht.add_scatter(x=agg['label'], y=aht_vals, mode='lines+markers',
-    line=dict(color='#7c5cfc', width=2), marker=dict(size=4),
-    fill='tozeroy', fillcolor='rgba(124,92,252,.08)',
-    text=aht_text, hovertemplate='%{x}<br>AHT: %{text}<extra></extra>')
-# Every 5 minutes (300 seconds)
-aht_min = int(aht_vals.min())
-aht_max = int(aht_vals.max())
-start_tick = (aht_min // 300) * 300
-tick_vals = list(range(start_tick, aht_max + 300, 300))
-tick_text = [f"{v//60:02d}:00" for v in tick_vals]
-fig_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (MM:SS)', height=280,
-    yaxis=dict(**YAXIS_BASE, tickvals=tick_vals, ticktext=tick_text,
-               range=[start_tick - 60, aht_max + 120]))
-col1.plotly_chart(fig_aht, use_container_width=True)
-
-# SL %
-fig_sl = go.Figure()
-fig_sl.add_scatter(x=agg['label'], y=agg['cum_120'].round(1), name='≤120s',
-    mode='lines+markers', line=dict(color='#a78bfa', width=2), marker=dict(size=4),
-    fill='tozeroy', fillcolor='rgba(167,139,250,.08)')
-fig_sl.update_layout(**PLOT_LAYOUT, title='Service Level %', height=280, xaxis=XAXIS_BASE, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
-col2.plotly_chart(fig_sl, use_container_width=True)
-
-# ASA
-fig_asa = go.Figure()
-asa_vals = agg['asa'].round(0)
-asa_text = asa_vals.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
-fig_asa.add_bar(x=agg['label'], y=asa_vals, marker_color='rgba(245,166,35,.6)',
-    marker_line=dict(color='#f5a623', width=1),
-    text=asa_text, hovertemplate='%{x}<br>ASA: %{text}<extra></extra>')
-asa_min = int(asa_vals.min() * 0.97)
-asa_max = int(asa_vals.max() * 1.03)
-tick_vals_a = [int(asa_min + i*(asa_max-asa_min)/4) for i in range(5)]
-tick_text_a = [f"{v//60:02d}:{v%60:02d}" for v in tick_vals_a]
-fig_asa.update_layout(**PLOT_LAYOUT, title='Avg Speed of Answer (MM:SS)', height=280,
-    yaxis=dict(**YAXIS_BASE, tickvals=tick_vals_a, ticktext=tick_text_a, range=[asa_min, asa_max]))
-col2.plotly_chart(fig_asa, use_container_width=True)
-
-# ── DETAIL TABLE ──────────────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown("### 📋 Detailed Data")
-
-table = agg[['label','offered','answered','abandon','abn_pct','aht_sec','asa','cum_120']].copy()
-table.columns = ['Period','Offered','Answered','Abandoned','Abn %','AHT','ASA','SL ≤120s %']
-table['Abn %']      = table['Abn %'].round(1)
-table['AHT']        = table['AHT'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
-table['ASA']        = table['ASA'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
-table['SL ≤120s %'] = table['SL ≤120s %'].round(1)
-
-st.dataframe(table, use_container_width=True, hide_index=True,
-    column_config={
-        'Offered':    st.column_config.NumberColumn(format="%d"),
-        'Answered':   st.column_config.NumberColumn(format="%d"),
-        'Abandoned':  st.column_config.NumberColumn(format="%d"),
-        'Abn %':      st.column_config.NumberColumn(format="%.1f%%"),
-        'AHT':        st.column_config.TextColumn(),
-        'ASA':        st.column_config.TextColumn(),
-        'SL ≤120s %': st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100),
-    })
-
-# ── PER INTERVAL TABLE ───────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown("### ⏱ Per Interval Data")
-
-# Use the already-filtered df (sidebar filters already applied)
-df_int = df.copy()
-
-# Aggregate by interval
-if 'interval' in df_int.columns:
-    grp_int = df_int.groupby('interval', sort=True).agg(
-        offered    =('offered',    'sum'),
-        answered   =('answered',   'sum'),
-        abandon    =('abandon',    'sum'),
-        talktime   =('talktime',   'sum'),
-        acw        =('acw',        'sum'),
-        answer_time=('answer_time','sum'),
-        ans_lt30   =('ans_lt30',   'sum'),
-        ans_30     =('ans_30',     'sum'),
-        ans_60     =('ans_60',     'sum'),
-        ans_90     =('ans_90',     'sum'),
-        ans_120    =('ans_120',    'sum'),
-    ).reset_index()
-
-    grp_int['aht_sec'] = np.where(grp_int['answered']>0, (grp_int['talktime']+grp_int['acw'])/grp_int['answered'], 0)
-    grp_int['asa']     = np.where(grp_int['answered']>0, grp_int['answer_time']/grp_int['answered'], 0)
-    grp_int['abn_pct'] = np.where(grp_int['offered']>0,  grp_int['abandon']/grp_int['offered']*100, 0)
-    grp_int['sl_120']  = np.where(grp_int['answered']>0,
-        (grp_int['ans_lt30']+grp_int['ans_30']+grp_int['ans_60']+grp_int['ans_90']+grp_int['ans_120'])/grp_int['answered']*100, 0)
-
-    tbl_int = grp_int[['interval','offered','answered','abandon','abn_pct','aht_sec','asa','sl_120']].copy()
-    tbl_int.columns = ['Interval','Offered','Answered','Abandoned','Abn %','AHT','ASA','SL ≤120s %']
-    tbl_int['Abn %']      = tbl_int['Abn %'].round(1)
-    tbl_int['AHT']        = tbl_int['AHT'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
-    tbl_int['ASA']        = tbl_int['ASA'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
-    tbl_int['SL ≤120s %'] = tbl_int['SL ≤120s %'].round(1)
-
-    st.dataframe(tbl_int, use_container_width=True, hide_index=True,
+if show_phone:
+    st.markdown("### 📊 Summary")
+    c1,c2,c3,c4,c5,c6,c7 = st.columns(7)
+    
+    def kpi(col, label, value, sub, color, badge=None):
+        badge_html = f'<div class="{badge[1]}">{badge[0]}</div>' if badge else ''
+        col.markdown(f"""
+        <div class="metric-card" style="border-top: 3px solid {color}">
+          <div class="metric-label">{label}</div>
+          <div class="metric-value" style="color:{color}">{value}</div>
+          <div class="metric-sub">{sub}</div>
+          {badge_html}
+        </div>""", unsafe_allow_html=True)
+    
+    kpi(c1, "Calls Offered",    f"{tot_off:,}",          "Total inbound",          "#4f8ef7")
+    kpi(c2, "Calls Answered",   f"{tot_ans:,}",           f"{ans_rate:.1f}% answer rate", "#22d3a0")
+    kpi(c3, "Calls Abandoned",  f"{tot_abn:,}",           "Did not reach agent",    "#f7564a")
+    kpi(c4, "Abandon Rate",     f"{avg_abn:.1f}%",        "of offered calls",       "#f7564a" if avg_abn>15 else "#f5a623" if avg_abn>10 else "#22d3a0",
+        ("High","badge-bad") if avg_abn>15 else ("Watch","badge-warn") if avg_abn>10 else ("OK","badge-good"))
+    kpi(c5, "Avg Handle Time",  fmt_mmss(avg_aht),        "(Talk + ACW) ÷ Calls",   "#7c5cfc")
+    kpi(c6, "SL ≤120s",         f"{avg_sl:.1f}%",         "% answered within 120s", "#22d3a0" if avg_sl>=80 else "#f5a623" if avg_sl>=50 else "#f7564a",
+        ("Target Met","badge-good") if avg_sl>=80 else ("Near Target","badge-warn") if avg_sl>=50 else ("Below Target","badge-bad"))
+    kpi(c7, "Avg Speed of Answer", fmt_mmss(avg_asa),     "Ring to pickup",         "#22d3a0" if avg_asa<=30 else "#f5a623" if avg_asa<=60 else "#f7564a")
+    
+    st.markdown("---")
+    
+    # ── CHARTS ────────────────────────────────────────────────────────────────────
+    # Volume chart
+    fig_vol = go.Figure()
+    fig_vol.add_scatter(x=agg['label'], y=agg['offered'],  name='Offered',
+        mode='lines+markers', line=dict(color='#4f8ef7', width=2), marker=dict(size=4))
+    fig_vol.add_scatter(x=agg['label'], y=agg['answered'], name='Answered',
+        mode='lines+markers', line=dict(color='#22d3a0', width=2), marker=dict(size=4))
+    fig_vol.add_scatter(x=agg['label'], y=agg['abandon'],  name='Abandoned',
+        mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=4))
+    fig_vol.update_layout(**PLOT_LAYOUT, title='Call Volume', height=300, xaxis=XAXIS_BASE, yaxis=YAXIS_BASE)
+    st.plotly_chart(fig_vol, use_container_width=True)
+    
+    col1, col2 = st.columns(2)
+    
+    # Abandon %
+    fig_abn = go.Figure()
+    fig_abn.add_scatter(x=agg['label'], y=agg['abn_pct'].round(1), mode='lines+markers',
+        line=dict(color='#f7564a', width=2), marker=dict(size=4),
+        fill='tozeroy', fillcolor='rgba(247,86,74,.08)')
+    fig_abn.update_layout(**PLOT_LAYOUT, title='Abandon Rate %', height=280, xaxis=XAXIS_BASE, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
+    col1.plotly_chart(fig_abn, use_container_width=True)
+    
+    # AHT
+    fig_aht = go.Figure()
+    aht_vals = agg['aht_sec'].round(0)
+    aht_text = aht_vals.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+    fig_aht.add_scatter(x=agg['label'], y=aht_vals, mode='lines+markers',
+        line=dict(color='#7c5cfc', width=2), marker=dict(size=4),
+        fill='tozeroy', fillcolor='rgba(124,92,252,.08)',
+        text=aht_text, hovertemplate='%{x}<br>AHT: %{text}<extra></extra>')
+    # Every 5 minutes (300 seconds)
+    aht_min = int(aht_vals.min())
+    aht_max = int(aht_vals.max())
+    start_tick = (aht_min // 300) * 300
+    tick_vals = list(range(start_tick, aht_max + 300, 300))
+    tick_text = [f"{v//60:02d}:00" for v in tick_vals]
+    fig_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (MM:SS)', height=280,
+        yaxis=dict(**YAXIS_BASE, tickvals=tick_vals, ticktext=tick_text,
+                   range=[start_tick - 60, aht_max + 120]))
+    col1.plotly_chart(fig_aht, use_container_width=True)
+    
+    # SL %
+    fig_sl = go.Figure()
+    fig_sl.add_scatter(x=agg['label'], y=agg['cum_120'].round(1), name='≤120s',
+        mode='lines+markers', line=dict(color='#a78bfa', width=2), marker=dict(size=4),
+        fill='tozeroy', fillcolor='rgba(167,139,250,.08)')
+    fig_sl.update_layout(**PLOT_LAYOUT, title='Service Level %', height=280, xaxis=XAXIS_BASE, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
+    col2.plotly_chart(fig_sl, use_container_width=True)
+    
+    # ASA
+    fig_asa = go.Figure()
+    asa_vals = agg['asa'].round(0)
+    asa_text = asa_vals.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+    fig_asa.add_bar(x=agg['label'], y=asa_vals, marker_color='rgba(245,166,35,.6)',
+        marker_line=dict(color='#f5a623', width=1),
+        text=asa_text, hovertemplate='%{x}<br>ASA: %{text}<extra></extra>')
+    asa_min = int(asa_vals.min() * 0.97)
+    asa_max = int(asa_vals.max() * 1.03)
+    tick_vals_a = [int(asa_min + i*(asa_max-asa_min)/4) for i in range(5)]
+    tick_text_a = [f"{v//60:02d}:{v%60:02d}" for v in tick_vals_a]
+    fig_asa.update_layout(**PLOT_LAYOUT, title='Avg Speed of Answer (MM:SS)', height=280,
+        yaxis=dict(**YAXIS_BASE, tickvals=tick_vals_a, ticktext=tick_text_a, range=[asa_min, asa_max]))
+    col2.plotly_chart(fig_asa, use_container_width=True)
+    
+    # ── DETAIL TABLE ──────────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 📋 Detailed Data")
+    
+    table = agg[['label','offered','answered','abandon','abn_pct','aht_sec','asa','cum_120']].copy()
+    table.columns = ['Period','Offered','Answered','Abandoned','Abn %','AHT','ASA','SL ≤120s %']
+    table['Abn %']      = table['Abn %'].round(1)
+    table['AHT']        = table['AHT'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+    table['ASA']        = table['ASA'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+    table['SL ≤120s %'] = table['SL ≤120s %'].round(1)
+    
+    st.dataframe(table, use_container_width=True, hide_index=True,
         column_config={
-            'Interval':   st.column_config.TextColumn(),
             'Offered':    st.column_config.NumberColumn(format="%d"),
             'Answered':   st.column_config.NumberColumn(format="%d"),
             'Abandoned':  st.column_config.NumberColumn(format="%d"),
@@ -455,83 +416,132 @@ if 'interval' in df_int.columns:
             'ASA':        st.column_config.TextColumn(),
             'SL ≤120s %': st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100),
         })
-    # ── Per Interval Line Charts ─────────────────────────────────────────────
-    st.markdown("#### Call Volume by Interval")
-    fig_int_vol = go.Figure()
-    fig_int_vol.add_scatter(x=grp_int['interval'], y=grp_int['offered'],  name='Offered',
-        mode='lines+markers', line=dict(color='#4f8ef7', width=2), marker=dict(size=4))
-    fig_int_vol.add_scatter(x=grp_int['interval'], y=grp_int['answered'], name='Answered',
-        mode='lines+markers', line=dict(color='#22d3a0', width=2), marker=dict(size=4))
-    fig_int_vol.add_scatter(x=grp_int['interval'], y=grp_int['abandon'],  name='Abandoned',
-        mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=4))
-    fig_int_vol.update_layout(**PLOT_LAYOUT, height=280, yaxis=YAXIS_BASE,
-        xaxis=XAXIS_INT)
-    st.plotly_chart(fig_int_vol, use_container_width=True)
-
-    col_ig1, col_ig2, col_ig3 = st.columns(3)
-
-    # Abandon %
-    fig_int_abn = go.Figure()
-    fig_int_abn.add_scatter(x=grp_int['interval'], y=grp_int['abn_pct'].round(1),
-        mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=3),
-        fill='tozeroy', fillcolor='rgba(247,86,74,.08)')
-    fig_int_abn.update_layout(**PLOT_LAYOUT, title='Abandon Rate %', height=220,
-        yaxis=dict(**YAXIS_BASE, ticksuffix='%'),
-        xaxis=XAXIS_INT)
-    col_ig1.plotly_chart(fig_int_abn, use_container_width=True)
-
-    # AHT
-    fig_int_aht = go.Figure()
-    aht_i = grp_int['aht_sec'].round(0)
-    aht_i_min = int(aht_i.min()); aht_i_max = int(aht_i.max())
-    start_i = (aht_i_min // 300) * 300
-    tv_i = list(range(start_i, aht_i_max + 300, 300))
-    tt_i = [f"{v//60:02d}:00" for v in tv_i]
-    aht_i_text = aht_i.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
-    fig_int_aht.add_scatter(x=grp_int['interval'], y=aht_i,
-        mode='lines+markers', line=dict(color='#7c5cfc', width=2), marker=dict(size=3),
-        text=aht_i_text, hovertemplate='%{x}<br>AHT: %{text}<extra></extra>',
-        fill='tozeroy', fillcolor='rgba(124,92,252,.08)')
-    fig_int_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (MM:SS)', height=220,
-        yaxis=dict(**YAXIS_BASE, tickvals=tv_i, ticktext=tt_i, range=[start_i-60, aht_i_max+120]),
-        xaxis=XAXIS_INT)
-    col_ig2.plotly_chart(fig_int_aht, use_container_width=True)
-
-    # ASA
-    fig_int_asa = go.Figure()
-    asa_i = grp_int['asa'].round(0)
-    asa_i_min = int(asa_i.min()); asa_i_max = int(asa_i.max())
-    start_ia = (asa_i_min // 300) * 300
-    tv_ia = list(range(start_ia, asa_i_max + 300, 300))
-    tt_ia = [f"{v//60:02d}:00" for v in tv_ia]
-    asa_i_text = asa_i.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
-    fig_int_asa.add_scatter(x=grp_int['interval'], y=asa_i,
-        mode='lines+markers', line=dict(color='#f5a623', width=2), marker=dict(size=3),
-        text=asa_i_text, hovertemplate='%{x}<br>ASA: %{text}<extra></extra>',
-        fill='tozeroy', fillcolor='rgba(245,166,35,.08)')
-    fig_int_asa.update_layout(**PLOT_LAYOUT, title='Avg Speed of Answer (MM:SS)', height=220,
-        yaxis=dict(**YAXIS_BASE, tickvals=tv_ia, ticktext=tt_ia, range=[start_ia-60, asa_i_max+120]),
-        xaxis=XAXIS_INT)
-    col_ig3.plotly_chart(fig_int_asa, use_container_width=True)
-
-    # SL
-    fig_int_sl = go.Figure()
-    fig_int_sl.add_scatter(x=grp_int['interval'], y=grp_int['sl_120'].round(1),
-        mode='lines+markers', line=dict(color='#a78bfa', width=2), marker=dict(size=3),
-        fill='tozeroy', fillcolor='rgba(167,139,250,.08)')
-    fig_int_sl.update_layout(**PLOT_LAYOUT, title='Service Level ≤120s %', height=220,
-        yaxis=dict(**YAXIS_BASE, ticksuffix='%'),
-        xaxis=XAXIS_INT)
-    col_ig1.plotly_chart(fig_int_sl, use_container_width=True)
-
-else:
-    st.info("Interval column not found in uploaded data.")
-
-# ── CHAT SECTION ─────────────────────────────────────────────────────────────
+    
+    # ── PER INTERVAL TABLE ───────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### ⏱ Per Interval Data")
+    
+    # Use the already-filtered df (sidebar filters already applied)
+    df_int = df.copy()
+    
+    # Aggregate by interval
+    if 'interval' in df_int.columns:
+        grp_int = df_int.groupby('interval', sort=True).agg(
+            offered    =('offered',    'sum'),
+            answered   =('answered',   'sum'),
+            abandon    =('abandon',    'sum'),
+            talktime   =('talktime',   'sum'),
+            acw        =('acw',        'sum'),
+            answer_time=('answer_time','sum'),
+            ans_lt30   =('ans_lt30',   'sum'),
+            ans_30     =('ans_30',     'sum'),
+            ans_60     =('ans_60',     'sum'),
+            ans_90     =('ans_90',     'sum'),
+            ans_120    =('ans_120',    'sum'),
+        ).reset_index()
+    
+        grp_int['aht_sec'] = np.where(grp_int['answered']>0, (grp_int['talktime']+grp_int['acw'])/grp_int['answered'], 0)
+        grp_int['asa']     = np.where(grp_int['answered']>0, grp_int['answer_time']/grp_int['answered'], 0)
+        grp_int['abn_pct'] = np.where(grp_int['offered']>0,  grp_int['abandon']/grp_int['offered']*100, 0)
+        grp_int['sl_120']  = np.where(grp_int['answered']>0,
+            (grp_int['ans_lt30']+grp_int['ans_30']+grp_int['ans_60']+grp_int['ans_90']+grp_int['ans_120'])/grp_int['answered']*100, 0)
+    
+        tbl_int = grp_int[['interval','offered','answered','abandon','abn_pct','aht_sec','asa','sl_120']].copy()
+        tbl_int.columns = ['Interval','Offered','Answered','Abandoned','Abn %','AHT','ASA','SL ≤120s %']
+        tbl_int['Abn %']      = tbl_int['Abn %'].round(1)
+        tbl_int['AHT']        = tbl_int['AHT'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+        tbl_int['ASA']        = tbl_int['ASA'].round(0).apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+        tbl_int['SL ≤120s %'] = tbl_int['SL ≤120s %'].round(1)
+    
+        st.dataframe(tbl_int, use_container_width=True, hide_index=True,
+            column_config={
+                'Interval':   st.column_config.TextColumn(),
+                'Offered':    st.column_config.NumberColumn(format="%d"),
+                'Answered':   st.column_config.NumberColumn(format="%d"),
+                'Abandoned':  st.column_config.NumberColumn(format="%d"),
+                'Abn %':      st.column_config.NumberColumn(format="%.1f%%"),
+                'AHT':        st.column_config.TextColumn(),
+                'ASA':        st.column_config.TextColumn(),
+                'SL ≤120s %': st.column_config.ProgressColumn(format="%.1f%%", min_value=0, max_value=100),
+            })
+        # ── Per Interval Line Charts ─────────────────────────────────────────────
+        st.markdown("#### Call Volume by Interval")
+        fig_int_vol = go.Figure()
+        fig_int_vol.add_scatter(x=grp_int['interval'], y=grp_int['offered'],  name='Offered',
+            mode='lines+markers', line=dict(color='#4f8ef7', width=2), marker=dict(size=4))
+        fig_int_vol.add_scatter(x=grp_int['interval'], y=grp_int['answered'], name='Answered',
+            mode='lines+markers', line=dict(color='#22d3a0', width=2), marker=dict(size=4))
+        fig_int_vol.add_scatter(x=grp_int['interval'], y=grp_int['abandon'],  name='Abandoned',
+            mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=4))
+        fig_int_vol.update_layout(**PLOT_LAYOUT, height=280, yaxis=YAXIS_BASE,
+            xaxis=XAXIS_INT)
+        st.plotly_chart(fig_int_vol, use_container_width=True)
+    
+        col_ig1, col_ig2, col_ig3 = st.columns(3)
+    
+        # Abandon %
+        fig_int_abn = go.Figure()
+        fig_int_abn.add_scatter(x=grp_int['interval'], y=grp_int['abn_pct'].round(1),
+            mode='lines+markers', line=dict(color='#f7564a', width=2), marker=dict(size=3),
+            fill='tozeroy', fillcolor='rgba(247,86,74,.08)')
+        fig_int_abn.update_layout(**PLOT_LAYOUT, title='Abandon Rate %', height=220,
+            yaxis=dict(**YAXIS_BASE, ticksuffix='%'),
+            xaxis=XAXIS_INT)
+        col_ig1.plotly_chart(fig_int_abn, use_container_width=True)
+    
+        # AHT
+        fig_int_aht = go.Figure()
+        aht_i = grp_int['aht_sec'].round(0)
+        aht_i_min = int(aht_i.min()); aht_i_max = int(aht_i.max())
+        start_i = (aht_i_min // 300) * 300
+        tv_i = list(range(start_i, aht_i_max + 300, 300))
+        tt_i = [f"{v//60:02d}:00" for v in tv_i]
+        aht_i_text = aht_i.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+        fig_int_aht.add_scatter(x=grp_int['interval'], y=aht_i,
+            mode='lines+markers', line=dict(color='#7c5cfc', width=2), marker=dict(size=3),
+            text=aht_i_text, hovertemplate='%{x}<br>AHT: %{text}<extra></extra>',
+            fill='tozeroy', fillcolor='rgba(124,92,252,.08)')
+        fig_int_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (MM:SS)', height=220,
+            yaxis=dict(**YAXIS_BASE, tickvals=tv_i, ticktext=tt_i, range=[start_i-60, aht_i_max+120]),
+            xaxis=XAXIS_INT)
+        col_ig2.plotly_chart(fig_int_aht, use_container_width=True)
+    
+        # ASA
+        fig_int_asa = go.Figure()
+        asa_i = grp_int['asa'].round(0)
+        asa_i_min = int(asa_i.min()); asa_i_max = int(asa_i.max())
+        start_ia = (asa_i_min // 300) * 300
+        tv_ia = list(range(start_ia, asa_i_max + 300, 300))
+        tt_ia = [f"{v//60:02d}:00" for v in tv_ia]
+        asa_i_text = asa_i.apply(lambda s: f"{int(s)//60:02d}:{int(s)%60:02d}")
+        fig_int_asa.add_scatter(x=grp_int['interval'], y=asa_i,
+            mode='lines+markers', line=dict(color='#f5a623', width=2), marker=dict(size=3),
+            text=asa_i_text, hovertemplate='%{x}<br>ASA: %{text}<extra></extra>',
+            fill='tozeroy', fillcolor='rgba(245,166,35,.08)')
+        fig_int_asa.update_layout(**PLOT_LAYOUT, title='Avg Speed of Answer (MM:SS)', height=220,
+            yaxis=dict(**YAXIS_BASE, tickvals=tv_ia, ticktext=tt_ia, range=[start_ia-60, asa_i_max+120]),
+            xaxis=XAXIS_INT)
+        col_ig3.plotly_chart(fig_int_asa, use_container_width=True)
+    
+        # SL
+        fig_int_sl = go.Figure()
+        fig_int_sl.add_scatter(x=grp_int['interval'], y=grp_int['sl_120'].round(1),
+            mode='lines+markers', line=dict(color='#a78bfa', width=2), marker=dict(size=3),
+            fill='tozeroy', fillcolor='rgba(167,139,250,.08)')
+        fig_int_sl.update_layout(**PLOT_LAYOUT, title='Service Level ≤120s %', height=220,
+            yaxis=dict(**YAXIS_BASE, ticksuffix='%'),
+            xaxis=XAXIS_INT)
+        col_ig1.plotly_chart(fig_int_sl, use_container_width=True)
+    
+    else:
+        st.info("Interval column not found in uploaded data.")
+    
+    # ── CHAT SECTION ─────────────────────────────────────────────────────────────
+    
 st.markdown("---")
 st.markdown("## 💬 Level 1 Chat")
 
-if chat_raw is not None and sel_chat_selected:
+if chat_raw is not None and show_chat:
     df_chat = chat_raw.copy()
     if sel_dates:
         df_chat = df_chat[df_chat['date'].dt.date.isin(sel_dates)]
@@ -690,7 +700,7 @@ if chat_raw is not None and sel_chat_selected:
             })
 elif chat_raw is None:
     st.info("Chat_Data.xlsx not found in repository.")
-else:
+elif not show_chat:
     st.info("Select CHAT in the LOB filter to view chat data.")
 
 st.sidebar.markdown("---")
