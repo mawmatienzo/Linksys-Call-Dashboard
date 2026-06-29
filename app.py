@@ -144,11 +144,11 @@ PLOT_LAYOUT = dict(
     paper_bgcolor='#1a1d27', plot_bgcolor='#1a1d27',
     font=dict(color='#e8eaf0', family='Segoe UI, system-ui, sans-serif', size=11),
     xaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148'),
-    yaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148'),
     margin=dict(l=10, r=10, t=30, b=10),
     legend=dict(bgcolor='#1a1d27', bordercolor='#2d3148'),
     hoverlabel=dict(bgcolor='#222637', bordercolor='#2d3148'),
 )
+YAXIS_BASE = dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148')
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 st.sidebar.markdown("## 📞 Call Centre Dashboard")
@@ -265,7 +265,7 @@ fig_vol = go.Figure()
 fig_vol.add_bar(x=agg['label'], y=agg['offered'],  name='Offered',   marker_color='rgba(79,142,247,.6)')
 fig_vol.add_bar(x=agg['label'], y=agg['answered'], name='Answered',  marker_color='rgba(34,211,160,.6)')
 fig_vol.add_bar(x=agg['label'], y=agg['abandon'],  name='Abandoned', marker_color='rgba(247,86,74,.6)')
-fig_vol.update_layout(**PLOT_LAYOUT, title='Call Volume', barmode='group', height=300)
+fig_vol.update_layout(**PLOT_LAYOUT, title='Call Volume', barmode='group', height=300, yaxis=YAXIS_BASE)
 st.plotly_chart(fig_vol, use_container_width=True)
 
 col1, col2 = st.columns(2)
@@ -275,8 +275,7 @@ fig_abn = go.Figure()
 fig_abn.add_scatter(x=agg['label'], y=agg['abn_pct'].round(1), mode='lines+markers',
     line=dict(color='#f7564a', width=2), marker=dict(size=4),
     fill='tozeroy', fillcolor='rgba(247,86,74,.08)')
-fig_abn.update_layout(**PLOT_LAYOUT, title='Abandon Rate %', height=280,
-    yaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148', ticksuffix='%'))
+fig_abn.update_layout(**PLOT_LAYOUT, title='Abandon Rate %', height=280, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
 col1.plotly_chart(fig_abn, use_container_width=True)
 
 # AHT
@@ -284,8 +283,7 @@ fig_aht = go.Figure()
 fig_aht.add_scatter(x=agg['label'], y=agg['aht_sec'].round(0), mode='lines+markers',
     line=dict(color='#7c5cfc', width=2), marker=dict(size=4),
     fill='tozeroy', fillcolor='rgba(124,92,252,.08)')
-fig_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (seconds)', height=280,
-    yaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148', tickformat='.0f'))
+fig_aht.update_layout(**PLOT_LAYOUT, title='Avg Handle Time (seconds)', height=280, yaxis=dict(**YAXIS_BASE, tickformat='.0f'))
 col1.plotly_chart(fig_aht, use_container_width=True)
 
 # SL %
@@ -294,15 +292,14 @@ fig_sl.add_scatter(x=agg['label'], y=agg['cum_30'].round(1),  name='≤30s',  mo
 fig_sl.add_scatter(x=agg['label'], y=agg['cum_60'].round(1),  name='≤60s',  mode='lines', line=dict(color='#22d3ee', width=2))
 fig_sl.add_scatter(x=agg['label'], y=agg['cum_90'].round(1),  name='≤90s',  mode='lines', line=dict(color='#4f8ef7', width=2))
 fig_sl.add_scatter(x=agg['label'], y=agg['cum_120'].round(1), name='≤120s', mode='lines', line=dict(color='#a78bfa', width=2))
-fig_sl.update_layout(**PLOT_LAYOUT, title='Service Level %', height=280,
-    yaxis=dict(gridcolor='#2d3148', linecolor='#2d3148', tickcolor='#2d3148', ticksuffix='%'))
+fig_sl.update_layout(**PLOT_LAYOUT, title='Service Level %', height=280, yaxis=dict(**YAXIS_BASE, ticksuffix='%'))
 col2.plotly_chart(fig_sl, use_container_width=True)
 
 # ASA
 fig_asa = go.Figure()
 fig_asa.add_bar(x=agg['label'], y=agg['asa'].round(0), marker_color='rgba(245,166,35,.6)',
     marker_line=dict(color='#f5a623', width=1))
-fig_asa.update_layout(**PLOT_LAYOUT, title='Avg Speed of Answer (seconds)', height=280)
+fig_asa.update_layout(**PLOT_LAYOUT, title='Avg Speed of Answer (seconds)', height=280, yaxis=YAXIS_BASE)
 col2.plotly_chart(fig_asa, use_container_width=True)
 
 # ── DETAIL TABLE ──────────────────────────────────────────────────────────────
